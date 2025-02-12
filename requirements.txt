@@ -1,7 +1,13 @@
+#flask
 flask
 flask-sqlalchemy
 
+#fastAPI
 fastapi
 uvicorn
-jinja2
+python-multipart
+jinja2 
 sqlalchemy
+
+#pyngrok
+#ngrok

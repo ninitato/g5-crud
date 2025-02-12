@@ -1,52 +1,60 @@
-# from fastapi import FastAPI, Request, Form
-# from fastapi.responses import HTMLResponse
-# from fastapi.staticfiles import StaticFiles
-# from sqlalchemy import create_engine, Column, Integer, String, Text
-# from sqlalchemy.ext.declarative import declarative_base
-# from sqlalchemy.orm import sessionmaker
-# from starlette.templating import Jinja2Templates
-# from starlette.responses import RedirectResponse
+from fastapi import FastAPI, Request, Form, Depends
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import create_engine, Column, Integer, String, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+import os
+from pathlib import Path
 
-# app = FastAPI()
+# Get the current directory
+BASE_DIR = Path(__file__).resolve().parent
 
-# # Database setup
-# DATABASE_URL = "sqlite:///./database.db"
-# engine = create_engine(DATABASE_URL)
-# SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-# Base = declarative_base()
+# Create instance folder if it doesn't exist
+os.makedirs(BASE_DIR / "instance", exist_ok=True)
 
-# class Item(Base):
-#     __tablename__ = "items"
-#     id = Column(Integer, primary_key=True, index=True)
-#     name = Column(String(100), nullable=False)
-#     description = Column(Text)
+# Database setup
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{BASE_DIR}/instance/database.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
-# Base.metadata.create_all(bind=engine)
+# Model
+class Item(Base):
+    __tablename__ = "items"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text)
 
-# # Static files and templates
-# app.mount("/static", StaticFiles(directory="static"), name="static")
-# templates = Jinja2Templates(directory="templates")
+# Create database tables
+Base.metadata.create_all(bind=engine)
 
-# @app.get("/", response_class=HTMLResponse)
-# async def index(request: Request):
-#     session = SessionLocal()
-#     items = session.query(Item).all()
-#     session.close()
-#     return templates.TemplateResponse("index.html", {"request": request, "items": items})
+# Dependency for database sessions
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-# @app.get("/create", response_class=HTMLResponse)
-# async def create_form(request: Request):
-#     return templates.TemplateResponse("create.html", {"request": request})
+app = FastAPI()
 
-# @app.post("/create")
-# async def create_item(name: str = Form(...), description: str = Form(...)):
-#     session = SessionLocal()
-#     new_item = Item(name=name, description=description)
-#     session.add(new_item)
-#     session.commit()
-#     session.close()
-#     return RedirectResponse(url="/", status_code=303)
+# Setup templates - Note this change
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-# if __name__ == "__main__":
-#     import uvicorn
-#     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request, db: Session = Depends(get_db)):
+    items = db.query(Item).all()
+    return templates.TemplateResponse("index.html", {"request": request, "items": items})
+
+@app.get("/create", response_class=HTMLResponse)
+async def create_get(request: Request):
+    return templates.TemplateResponse("create.html", {"request": request})
+
+@app.post("/create")
+async def create_post(name: str = Form(...), description: str = Form(...), db: Session = Depends(get_db)):
+    new_item = Item(name=name, description=description)
+    db.add(new_item)
+    db.commit()
+    return RedirectResponse(url="/", status_code=303)

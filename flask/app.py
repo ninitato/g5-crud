@@ -1,8 +1,18 @@
 from flask import Flask, render_template, request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
+import os
+from pathlib import Path
 
-app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app = Flask(__name__, instance_relative_config=True)
+
+# Get the current directory (flask folder)
+BASE_DIR = Path(__file__).resolve().parent
+
+# Create instance folder inside flask directory
+os.makedirs(BASE_DIR / "instance", exist_ok=True)
+
+# Update database path to be inside flask folder
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{BASE_DIR}/instance/database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
